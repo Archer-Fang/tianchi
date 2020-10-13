@@ -1,3 +1,9 @@
+#custom
+tmp/train
+tmp/test
+chinese_L-12_H-768_A-12/
+*.zip
+*.weights
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
