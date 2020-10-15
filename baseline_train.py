@@ -3,7 +3,8 @@ import json
 from keras.layers import Dense  
 from keras.models import Model  
 from tqdm import tqdm  
-  
+import pickle
+
 from bert4keras.backend import keras, K  
 from bert4keras.layers import ConditionalRandomField  
 from bert4keras.models import build_transformer_model  
@@ -11,27 +12,33 @@ from bert4keras.optimizers import Adam
 from bert4keras.snippets import ViterbiDecoder, to_array  
 from bert4keras.snippets import sequence_padding, DataGenerator  
 from bert4keras.tokenizers import Tokenizer  
-  
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# import tensorflow as tf
+# import keras.backend.tensorflow_backend as KTF
+# KTF.set_session(tf.Session(config=tf.ConfigProto(device_count={'gpu':1})))
+
 maxlen = 256  
-epochs = 2
-batch_size = 1
+epochs = 100
+batch_size = 8
 bert_layers = 12  
 learing_rate = 1e-5 # bert_layers越小，学习率应该要越大  
 crf_lr_multiplier = 1000 # 必要时扩大CRF层的学习率  
   
 # bert配置  
 config_path = 'chinese_L-12_H-768_A-12/bert_config.json'  
-checkpoint_path = 'chinese_L-12_H-768_A-12/bert_model.ckpt'  
+# checkpoint_path = 'chinese_L-12_H-768_A-12/bert_model.ckpt'  
 dict_path = 'chinese_L-12_H-768_A-12/vocab.txt'  
 labels = []  
   
   
 def load_data(filename):  
     D = []  
-    f = open(filename, encoding='utf-8')  
-    for f in f.readlines():  
+    with open('a.pkl','rb') as f :
+        
+        l_medical=pickle.load(f)
+    for medical in l_medical:  
         d = []  
-        medical = json.loads(f)  
         medical_text = medical["text"]  
         medical_labels = medical["labels"]  
         laster_label = 0  
@@ -49,7 +56,7 @@ def load_data(filename):
   
   
 # 标注数据  
-train_data = load_data('medical_2020730_ner_label.txt')  
+train_data = load_data('a.pkl')  
   
 # 建立分词器  
 tokenizer = Tokenizer(dict_path, do_lower_case=True)  
@@ -95,7 +102,8 @@ class data_generator(DataGenerator):
   
 model = build_transformer_model(  
     config_path,  
-  checkpoint_path,  
+    None
+#   checkpoint_path,  
 )  
 
 output_layer = 'Transformer-%s-FeedForward-Norm' % (bert_layers - 1)  
@@ -119,8 +127,8 @@ class NamedEntityRecognizer(ViterbiDecoder):
  """  
     def recognize(self, text):  
         tokens = tokenizer.tokenize(text)  
-        while len(tokens) > 512:  
-            tokens.pop(-2)  
+        # while len(tokens) > 512:  
+        #     tokens.pop(-2)  
         mapping = tokenizer.rematch(text, tokens)  
         token_ids = tokenizer.tokens_to_ids(tokens)  
         segment_ids = [0] * len(token_ids)  
@@ -132,13 +140,14 @@ class NamedEntityRecognizer(ViterbiDecoder):
             if label > 0:  
                 if label % 2 == 1:  
                     starting = True  
-                entities.append([[i], id2label[(label - 1) // 2]])  
-            #     if starting:  
-            #         entities[-1][0].append(i)  
-            #     else:  
-            #         starting = False  
-            # else:  
-            #     starting = False  
+                    entities.append([[i], id2label[(label - 1) // 2]])  
+                else:
+                    if starting:  
+                        entities[-1][0].append(i)  
+                # else:  
+                #     starting = False  
+            else:  
+                starting = False  
         ner_answer = []  
         for w, l in entities:  
             ner_answer.append([mapping[w[0]][0],mapping[w[-1]][-1] + 1, l])  

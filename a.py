@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import  json
+import pickle
 
 dataset = []
 train_file = 'a.txt'
@@ -13,8 +14,8 @@ for i in range(1000):
 	txt = open(txt_path, 'r',encoding='UTF-8')
 	text = txt.read()
 	data = {}
-	data["id"] = str(i)
-	data["text"] = text
+	data["id"] = i
+	data["text"] = str(text)
 	label = []
 	for j in range(ann.shape[0]):
 		tmp = ann.iloc[j, 1]
@@ -22,13 +23,12 @@ for i in range(1000):
 		label.append([int(tmps[1]), int(tmps[2]), tmps[0]])
 	data["labels"] = label
 
-	wf = open(train_file, encoding='UTF-8', mode='a')
-	wf.write(str(data))
-	wf.write('\r\n')
-	wf.close()
-a = open('a.txt', 'r', encoding='UTF-8')
-print(a.readline())
-a.close()
+	dataset.append(data)
+with open('a.pkl','wb') as f :
+	pickle.dump(dataset,f)
+
+
+
 # a = []
 # b = []
 # c = []
