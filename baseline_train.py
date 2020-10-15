@@ -13,15 +13,15 @@ from bert4keras.snippets import ViterbiDecoder, to_array
 from bert4keras.snippets import sequence_padding, DataGenerator  
 from bert4keras.tokenizers import Tokenizer  
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 # import tensorflow as tf
 # import keras.backend.tensorflow_backend as KTF
 # KTF.set_session(tf.Session(config=tf.ConfigProto(device_count={'gpu':1})))
 
-maxlen = 256  
-epochs = 100
-batch_size = 8
-bert_layers = 12  
+maxlen = 3037  
+epochs = 20
+batch_size = 40
+bert_layers = 6  
 learing_rate = 1e-5 # bert_layers越小，学习率应该要越大  
 crf_lr_multiplier = 1000 # 必要时扩大CRF层的学习率  
   
@@ -29,34 +29,38 @@ crf_lr_multiplier = 1000 # 必要时扩大CRF层的学习率
 config_path = 'chinese_L-12_H-768_A-12/bert_config.json'  
 # checkpoint_path = 'chinese_L-12_H-768_A-12/bert_model.ckpt'  
 dict_path = 'chinese_L-12_H-768_A-12/vocab.txt'  
+
+
 labels = []  
-  
-  
 def load_data(filename):  
     D = []  
     with open('a.pkl','rb') as f :
         
         l_medical=pickle.load(f)
+    max_n=0
     for medical in l_medical:  
         d = []  
         medical_text = medical["text"]  
+        if len(medical_text)>max_n:
+            max_n=len(medical_text)
         medical_labels = medical["labels"]  
         laster_label = 0  
         for medical_label in medical_labels:  
             begin_label = medical_label[0]  
 
-            d.append([medical_text[laster_label:begin_label], "O"])  
+            # d.append([medical_text[laster_label:begin_label], "O"])  
             last_label = medical_label[1]  
             d.append([medical_text[begin_label:last_label], medical_label[2]])  
             laster_label = last_label  
             if medical_label[2] not in labels:  
                 labels.append(medical_label[2])  
         D.append(d)  
+    print(max_n)
     return D  
   
   
 # 标注数据  
-train_data = load_data('a.pkl')  
+train_data = load_data('train.pkl')  
   
 # 建立分词器  
 tokenizer = Tokenizer(dict_path, do_lower_case=True)  

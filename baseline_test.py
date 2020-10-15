@@ -11,46 +11,57 @@ from bert4keras.optimizers import Adam
 from bert4keras.snippets import ViterbiDecoder, to_array  
 from bert4keras.snippets import sequence_padding, DataGenerator  
 from bert4keras.tokenizers import Tokenizer  
-  
-maxlen = 256  
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+import pickle
+
+maxlen = 9999  
 epochs = 10  
 batch_size = 32  
-bert_layers = 10  
+bert_layers = 6
 learing_rate = 1e-5 # bert_layers越小，学习率应该要越大  
 crf_lr_multiplier = 1000 # 必要时扩大CRF层的学习率  
   
 # bert配置  
 config_path = 'chinese_L-12_H-768_A-12/bert_config.json'  
-checkpoint_path = 'chinese_L-12_H-768_A-12/bert_model.ckpt'  
+# checkpoint_path = '20200730.weights'  
 dict_path = 'chinese_L-12_H-768_A-12/vocab.txt'  
-labels = []  
   
   
 def load_data(filename):  
+    with open('test.pkl','rb') as f :
+        l_medical=pickle.load(f)
+    
+    return l_medical  
+labels = []  
+def load_data2(filename):  
     D = []  
-    f = open(filename, encoding='utf-8')  
-    for f in f.readlines():  
+    with open('a.pkl','rb') as f :
+        
+        l_medical=pickle.load(f)
+    for medical in l_medical:  
         d = []  
-        medical = json.loads(f)  
         medical_text = medical["text"]  
         medical_labels = medical["labels"]  
         laster_label = 0  
-    for medical_label in medical_labels:  
-        begin_label = medical_label[0]  
+        for medical_label in medical_labels:  
+            begin_label = medical_label[0]  
 
-        d.append([medical_text[laster_label:begin_label], "O"])  
-        last_label = medical_label[1]  
-        d.append([medical_text[begin_label:last_label], medical_label[2]])  
-        laster_label = last_label  
-        if medical_label[2] not in labels:  
-            labels.append(medical_label[2])  
+            d.append([medical_text[laster_label:begin_label], "O"])  
+            last_label = medical_label[1]  
+            d.append([medical_text[begin_label:last_label], medical_label[2]])  
+            laster_label = last_label  
+            if medical_label[2] not in labels:  
+                labels.append(medical_label[2])  
         D.append(d)  
-        # print(D)
     return D  
   
+test_data = load_data('test.pkl')  
   
 # 标注数据  
-train_data = load_data('medical_2020730_ner_label.txt')  
+train_data = load_data2('train.pkl')  
+del train_data
+# 标注数据  
   
 # 建立分词器  
 tokenizer = Tokenizer(dict_path, do_lower_case=True)  
@@ -76,10 +87,10 @@ class data_generator(DataGenerator):
                         labels += [0] * len(w_token_ids)  
                     else:  
                         B = label2id[l] * 2 + 1  
-            I = label2id[l] * 2 + 2  
-            labels += ([B] + [I] * (len(w_token_ids) - 1))  
-                # else:  
-                #     break  
+                        I = label2id[l] * 2 + 2  
+                        labels += ([B] + [I] * (len(w_token_ids) - 1))  
+                else:  
+                    break  
             token_ids += [tokenizer._token_end_id]  
             labels += [0]  
             segment_ids = [0] * len(token_ids)  
@@ -87,16 +98,16 @@ class data_generator(DataGenerator):
             batch_segment_ids.append(segment_ids)  
             batch_labels.append(labels)  
             if len(batch_token_ids) == self.batch_size or is_end:  
-                batch_token_ids = sequence_padding(batch_token_ids)  
+                batch_token_ids = sequence_padding(batch_token_ids) 
                 batch_segment_ids = sequence_padding(batch_segment_ids)  
                 batch_labels = sequence_padding(batch_labels)  
                 yield [batch_token_ids, batch_segment_ids], batch_labels  
                 batch_token_ids, batch_segment_ids, batch_labels = [], [], []  
   
-  
 model = build_transformer_model(  
     config_path,  
-  checkpoint_path,  
+    # checkpoint_path
+#   None  
 )  
   
 output_layer = 'Transformer-%s-FeedForward-Norm' % (bert_layers - 1)  
@@ -120,8 +131,8 @@ class NamedEntityRecognizer(ViterbiDecoder):
  """  
     def recognize(self, text):  
         tokens = tokenizer.tokenize(text)  
-        while len(tokens) > 512:  
-            tokens.pop(-2)  
+        # while len(tokens) > 512:  
+        #     tokens.pop(-2)  
         mapping = tokenizer.rematch(text, tokens)  
         token_ids = tokenizer.tokens_to_ids(tokens)  
         segment_ids = [0] * len(token_ids)  
@@ -133,13 +144,14 @@ class NamedEntityRecognizer(ViterbiDecoder):
             if label > 0:  
                 if label % 2 == 1:  
                     starting = True  
-                entities.append([[i], id2label[(label - 1) // 2]])  
-            #     if starting:  
-            #         entities[-1][0].append(i)  
-            #     else:  
-            #         starting = False  
-            # else:  
-            #     starting = False  
+                    entities.append([[i], id2label[(label - 1) // 2]])  
+                else:
+                    if starting:  
+                        entities[-1][0].append(i)  
+                # else:  
+                #     starting = False  
+            else:  
+                starting = False  
         ner_answer = []  
         for w, l in entities:  
             ner_answer.append([mapping[w[0]][0],mapping[w[-1]][-1] + 1, l])  
@@ -150,23 +162,44 @@ class NamedEntityRecognizer(ViterbiDecoder):
 NER = NamedEntityRecognizer(trans=K.eval(CRF.trans), starts=[0], ends=[0])  
   
 if __name__ == '__main__':  
-    # model.load_weights(r'..\models\chinese_medical_intruction\20200730.weights')  
+    model.load_weights(r'20200730.weights')  
     # medical_dicts_drop_duplicates = open("..\medical_data\chinese_medical_drop.csv", "r",encoding="utf-8")  
     export = []  
     import json  
-  
-    ids = 2000  
-    with open("medical_ner_auto_predict_export.txt", "w") as write_file:  
-        # for i in tqdm(medical_dicts_drop_duplicates):  
-        export_dict = {}  
-        ids += 1  
-        # i_text = json.loads(i)  
-        export_dict["id"] = ids  
-        export_dict["text"] = "（１）食物多样，谷类为主。（２）多吃蔬菜、水果和薯类。（３）每天吃奶类、豆类或豆制品。（４）经常吃适量的鱼、禽、蛋、瘦肉，少吃肥肉或荤油。" 
-        R = NER.recognize(export_dict["text"]) 
-        # text="i have apple"
-        # R = NER.recognize(test)  
+    L=[]
+    for item in test_data:
+        num=0
+        text=item['text']
+        R = NER.recognize(text)  
+        RR=[]
+        for _ in R:
+            num=num+1
+            id='T'+str(num)
+            tmp=[id,]
+            part_seq=text[_[0]:_[1]]
+            tmp=tmp+_+[part_seq]
+            RR.append(tmp)
 
-        export_dict["labels"] = R  
-        export_dict = json.dumps(export_dict, ensure_ascii=False)  
-        write_file.write(export_dict)
+        print(RR)
+        L.append(RR)
+        break
+    for index,item in enumerate(L):
+        with open(f'result/{index+1000}.ann','w') as f:
+            for _ in item:
+                f.write(f"{_[0]}	{_[3]} {_[1]} {_[2]}	{_[4]}\n")
+    # ids = 999  
+    # with open("medical_ner_auto_predict_export.txt", "w") as write_file:  
+    #     # for i in tqdm(medical_dicts_drop_duplicates):  
+    #     export_dict = {}  
+    #     ids += 1  
+    #     # i_text = json.loads(i)  
+    #     export_dict["id"] = ids  
+    #     export_dict["text"] = "（１）食物多样，谷类为主。（２）多吃蔬菜、水果和薯类。（３）每天吃奶类、豆类或豆制品。（４）经常吃适量的鱼、禽、蛋、瘦肉，少吃肥肉或荤油。" 
+    #     R = NER.recognize(export_dict["text"]) 
+    #     # text="i have apple"
+    #     # R = NER.recognize(test)  
+
+    #     export_dict["labels"] = R  
+    #     export_dict = json.dumps(export_dict, ensure_ascii=False)  
+    #     write_file.write(export_dict)
+    
